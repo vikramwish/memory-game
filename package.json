@@ -1,0 +1,13 @@
+{
+  "name": "memory-game",
+  "version": "1.0.0",
+  "description": "A memory game with single-player and multiplayer modes.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.5.4"
+  }
+}

@@ -1,0 +1,27 @@
+# .gitignore
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Dependency directories
+bower_components/
+
+# Build directories
+dist/
+
+# Environment variables
+.env
+
+# System files
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+
+# Coverage reports
+coverage/
