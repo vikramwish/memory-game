@@ -277,7 +277,7 @@ io.on('connection', (socket) => {
                 
                 setTimeout(() => {
                     if (card1.symbol === card2.symbol) {
-                        // Match found
+                        // Match found - same player gets another turn
                         card1.matched = true;
                         card2.matched = true;
                         room.scores[currentPlayer.id]++;
@@ -306,7 +306,7 @@ io.on('connection', (socket) => {
                             });
                         }
                     } else {
-                        // No match - flip cards back
+                        // No match - flip cards back and switch turn
                         card1.flipped = false;
                         card2.flipped = false;
                         
@@ -314,7 +314,7 @@ io.on('connection', (socket) => {
                             cards: [card1.id, card2.id]
                         });
 
-                        // Switch to next player
+                        // Switch to next player ONLY when no match
                         room.currentPlayer = (room.currentPlayer + 1) % room.players.length;
                         io.to(roomId).emit('turn-changed', {
                             currentPlayer: room.players[room.currentPlayer]

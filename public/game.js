@@ -138,6 +138,13 @@ class MemoryGame {
                     this.togglePause();
                 }
             }
+            // R key for reset stuck cards (debugging)
+            if (e.key === 'r' || e.key === 'R') {
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    this.resetStuckCards();
+                }
+            }
         });
 
         // Form changes
@@ -702,6 +709,8 @@ class MemoryGame {
      * Create a card element
      */
     createCardElement(card, index) {
+        console.log(`Creating card element for index ${index}:`, card);
+        
         const cardElement = document.createElement('button');
         cardElement.className = 'memory-card';
         cardElement.setAttribute('data-index', index);
@@ -712,6 +721,8 @@ class MemoryGame {
         cardContent.className = 'card-content';
         cardContent.textContent = card.symbol;
         cardContent.setAttribute('aria-hidden', 'true');
+        
+        console.log(`Card content created with symbol: ${card.symbol}`);
         
         cardElement.appendChild(cardContent);
         
@@ -727,11 +738,32 @@ class MemoryGame {
      * Update card visual state
      */
     updateCardVisualState(cardElement, card) {
+        if (!cardElement || !card) return;
+        
+        console.log(`Updating visual for card ${cardElement.dataset.index}:`, {
+            symbol: card.symbol,
+            isFlipped: card.isFlipped,
+            isMatched: card.isMatched
+        });
+        
+        // Update classes
         cardElement.classList.toggle('flipped', card.isFlipped);
         cardElement.classList.toggle('matched', card.isMatched);
-        cardElement.classList.toggle('disabled', card.isMatched || this.gameState.flippedCards.length >= 2);
         
-        const ariaLabel = `Card ${parseInt(cardElement.dataset.index) + 1}`;
+        // Disable only matched cards or when we have 2 flipped cards and this isn't one of them
+        const shouldDisable = card.isMatched || 
+                             (this.gameState.flippedCards.length >= 2 && !card.isFlipped);
+        cardElement.classList.toggle('disabled', shouldDisable);
+        
+        // Update content
+        const cardContent = cardElement.querySelector('.card-content');
+        if (cardContent) {
+            cardContent.textContent = card.symbol;
+        }
+        
+        // Update aria label
+        const cardIndex = parseInt(cardElement.dataset.index);
+        const ariaLabel = `Card ${cardIndex + 1}`;
         if (card.isMatched) {
             cardElement.setAttribute('aria-label', `${ariaLabel}, matched`);
         } else if (card.isFlipped) {
@@ -745,98 +777,79 @@ class MemoryGame {
      * Flip a card
      */
     flipCard(cardElement, index) {
-        console.log(`flipCard called with index: ${index}`);
+        console.log(`=== FLIP CARD START - Index: ${index} ===`);
         
-        try {
-            console.log('Game state check:', {
-                isPlaying: this.gameState.isPlaying,
-                isPaused: this.gameState.isPaused
-            });
-            
-            if (!this.gameState.isPlaying || this.gameState.isPaused) {
-                console.log('Game not playing or paused, returning');
-                return;
-            }
-            
-            const card = this.gameState.cards[index];
-            console.log('Card data:', card);
-            
-            // Check if card can be flipped
-            if (card.isFlipped || card.isMatched || this.gameState.flippedCards.length >= 2) {
-                console.log('Card cannot be flipped:', {
-                    isFlipped: card.isFlipped,
-                    isMatched: card.isMatched,
-                    flippedCardsLength: this.gameState.flippedCards.length,
-                    flippedCards: this.gameState.flippedCards
-                });
-                
-                // Safety check: if we have 2 flipped cards that aren't being processed, force process them
-                if (this.gameState.flippedCards.length >= 2 && !this.flipTimeout) {
-                    console.log('SAFETY: Force processing stuck cards');
-                    setTimeout(() => {
-                        this.processCardFlip();
-                    }, 100);
-                }
-                return;
-            }
-            
-            // For multiplayer, check if it's player's turn
-            if (this.gameState.isMultiplayer && this.gameState.currentPlayer !== this.getPlayerIndex()) {
-                console.log(`Multiplayer turn check failed:`, {
-                    isMultiplayer: this.gameState.isMultiplayer,
-                    currentPlayer: this.gameState.currentPlayer,
-                    playerIndex: this.getPlayerIndex(),
-                    playerId: this.gameState.playerId,
-                    players: this.gameState.players
-                });
-                this.showStatus("It's not your turn!", 'warning');
-                return;
-            }
-            
-            console.log(`Card flip allowed:`, {
-                isMultiplayer: this.gameState.isMultiplayer,
-                currentPlayer: this.gameState.currentPlayer,
-                playerIndex: this.getPlayerIndex()
-            });
-            
-            // Flip the card
-            card.isFlipped = true;
-            this.gameState.flippedCards.push(index);
-            this.updateCardVisualState(cardElement, card);
-            
-            // Announce card flip
-            this.announce(`Flipped card showing ${card.symbol}`);
-            
-            if (this.gameState.isMultiplayer && this.socket) {
-                // Send flip to server (MULTIPLAYER ONLY)
-                console.log('MULTIPLAYER: Sending flip to server...');
-                this.socket.emit('flip-card', {
-                    roomId: this.gameState.roomId,
-                    cardId: card.id
-                });
-            } else {
-                // Handle flip locally (SINGLE PLAYER ONLY)
-                console.log('SINGLE PLAYER: Processing card flip locally...');
-                
-                // Process immediately after flipping
-                setTimeout(() => {
-                    this.processCardFlip();
-                }, 100); // Small delay to ensure card state is updated
-            }
-            
-        } catch (error) {
-            console.error('Error in flipCard:', error);
-            this.handleError('Failed to flip card', error);
+        // Basic validation
+        if (!this.gameState.isPlaying || this.gameState.isPaused) {
+            console.log('Game not active, blocking flip');
+            return;
         }
+        
+        const card = this.gameState.cards[index];
+        if (!card) {
+            console.log('Card not found');
+            return;
+        }
+        
+        // Check if card can be flipped
+        if (card.isFlipped || card.isMatched) {
+            console.log('Card already flipped or matched');
+            return;
+        }
+        
+        // Check if we already have 2 cards flipped
+        if (this.gameState.flippedCards.length >= 2) {
+            console.log('Already have 2 cards flipped, blocking');
+            return;
+        }
+        
+        // For multiplayer, check turn
+        if (this.gameState.isMultiplayer && this.gameState.currentPlayer !== this.getPlayerIndex()) {
+            this.showStatus("It's not your turn!", 'warning');
+            return;
+        }
+        
+        console.log('FLIPPING CARD:', card.symbol);
+        
+        // Flip the card
+        card.isFlipped = true;
+        this.gameState.flippedCards.push(index);
+        this.updateCardVisualState(cardElement, card);
+        
+        // Announce flip
+        this.announce(`Flipped card showing ${card.symbol}`);
+        
+        // Handle based on game mode
+        if (this.gameState.isMultiplayer && this.socket) {
+            // MULTIPLAYER: Send to server
+            this.socket.emit('flip-card', {
+                roomId: this.gameState.roomId,
+                cardId: card.id
+            });
+        } else {
+            // SINGLE PLAYER: Handle locally
+            this.handleSinglePlayerFlip();
+        }
+        
+        console.log(`=== FLIP CARD END - Flipped cards: ${this.gameState.flippedCards.length} ===`);
     }
 
     /**
-     * Process card flip logic
+     * Handle single player card flip logic
      */
-    processCardFlip() {
-        console.log('processCardFlip called, flipped cards:', this.gameState.flippedCards.length);
+    handleSinglePlayerFlip() {
+        console.log(`=== SINGLE PLAYER FLIP HANDLER ===`);
+        console.log('Flipped cards:', this.gameState.flippedCards.length);
+        
+        if (this.gameState.flippedCards.length === 1) {
+            console.log('First card flipped, waiting for second');
+            return;
+        }
         
         if (this.gameState.flippedCards.length === 2) {
+            console.log('Two cards flipped, processing match...');
+            
+            // Increment moves
             this.gameState.moves++;
             this.updateGameInfo();
             
@@ -845,82 +858,99 @@ class MemoryGame {
             const secondCard = this.gameState.cards[secondIndex];
             
             console.log('Checking match:', {
-                firstCard: firstCard.symbol,
-                secondCard: secondCard.symbol,
+                first: firstCard.symbol,
+                second: secondCard.symbol,
                 match: firstCard.symbol === secondCard.symbol
             });
             
             if (firstCard.symbol === secondCard.symbol) {
-                // Match found
-                this.handleMatch(firstIndex, secondIndex);
+                // MATCH FOUND
+                console.log('MATCH FOUND!');
+                setTimeout(() => {
+                    this.processSinglePlayerMatch(firstIndex, secondIndex);
+                }, 800);
             } else {
-                // No match
-                this.handleNoMatch();
+                // NO MATCH
+                console.log('NO MATCH - will flip back');
+                setTimeout(() => {
+                    this.processSinglePlayerNoMatch();
+                }, 1200);
             }
         }
     }
 
     /**
-     * Handle successful match
+     * Process single player match
      */
-    handleMatch(firstIndex, secondIndex) {
+    processSinglePlayerMatch(firstIndex, secondIndex) {
+        console.log('=== PROCESSING MATCH ===');
+        
         const firstCard = this.gameState.cards[firstIndex];
         const secondCard = this.gameState.cards[secondIndex];
         
+        // Mark as matched
         firstCard.isMatched = true;
         secondCard.isMatched = true;
         
+        // Update game state
         this.gameState.matchedPairs++;
         this.gameState.score += 10;
         this.gameState.flippedCards = [];
         
-        // Update visual state
+        // Update visual
         const firstElement = document.querySelector(`[data-index="${firstIndex}"]`);
         const secondElement = document.querySelector(`[data-index="${secondIndex}"]`);
         
         if (firstElement) this.updateCardVisualState(firstElement, firstCard);
         if (secondElement) this.updateCardVisualState(secondElement, secondCard);
         
-        this.announce(`Match found! ${firstCard.symbol} and ${secondCard.symbol}`);
         this.showStatus('Great match!', 'success');
+        this.announce(`Match found! ${firstCard.symbol}`);
+        this.updateGameInfo();
         
-        // Check if game is complete
+        // Check win condition
         const totalPairs = this.gameState.cards.length / 2;
         if (this.gameState.matchedPairs === totalPairs) {
-            this.endGame(true);
+            setTimeout(() => {
+                this.endGame(true);
+            }, 500);
         }
         
-        this.updateGameInfo();
+        console.log('Match processed successfully');
     }
 
     /**
-     * Handle no match
+     * Process single player no match
      */
-    handleNoMatch() {
-        console.log('handleNoMatch called - setting timeout to flip cards back');
+    processSinglePlayerNoMatch() {
+        console.log('=== PROCESSING NO MATCH ===');
         
-        this.flipTimeout = setTimeout(() => {
-            console.log('Flipping cards back after no match');
-            
-            this.gameState.flippedCards.forEach(index => {
-                const card = this.gameState.cards[index];
-                const cardElement = document.querySelector(`[data-index="${index}"]`);
-                
-                console.log(`Flipping back card at index ${index}:`, card.symbol);
-                card.isFlipped = false;
-                if (cardElement) {
-                    this.updateCardVisualState(cardElement, card);
-                }
-            });
-            
-            this.gameState.flippedCards = [];
-            this.announce('Cards flipped back, try again');
-            
-            // Re-enable all unmatched cards
-            this.updateAllCards();
-            console.log('Cards reset, ready for next move');
-            
-        }, 1000);
+        const [firstIndex, secondIndex] = this.gameState.flippedCards;
+        const firstCard = this.gameState.cards[firstIndex];
+        const secondCard = this.gameState.cards[secondIndex];
+        
+        console.log('Flipping back cards:', firstCard.symbol, secondCard.symbol);
+        
+        // Flip cards back
+        firstCard.isFlipped = false;
+        secondCard.isFlipped = false;
+        
+        // Clear flipped cards
+        this.gameState.flippedCards = [];
+        
+        // Update visual
+        const firstElement = document.querySelector(`[data-index="${firstIndex}"]`);
+        const secondElement = document.querySelector(`[data-index="${secondIndex}"]`);
+        
+        if (firstElement) this.updateCardVisualState(firstElement, firstCard);
+        if (secondElement) this.updateCardVisualState(secondElement, secondCard);
+        
+        // Update all cards to ensure proper state
+        this.updateAllCards();
+        
+        this.announce('No match, cards flipped back');
+        
+        console.log('No match processed - ready for next turn');
     }
 
     /**
@@ -940,21 +970,39 @@ class MemoryGame {
      */
     resetStuckCards() {
         console.log('EMERGENCY: Resetting stuck cards');
+        
+        // Clear any timeouts
         if (this.flipTimeout) {
             clearTimeout(this.flipTimeout);
             this.flipTimeout = null;
         }
         
-        this.gameState.flippedCards.forEach(index => {
-            const card = this.gameState.cards[index];
+        // Reset all non-matched cards to unflipped state
+        this.gameState.cards.forEach((card, index) => {
             if (!card.isMatched) {
                 card.isFlipped = false;
             }
         });
         
+        // Clear flipped cards array
         this.gameState.flippedCards = [];
+        
+        // Update all visual states
         this.updateAllCards();
+        
         this.showStatus('Cards reset - ready to continue', 'success');
+        console.log('Emergency reset complete');
+    }
+
+    /**
+     * Debug function - expose to global scope for testing
+     */
+    debug() {
+        return {
+            gameState: this.gameState,
+            resetStuckCards: () => this.resetStuckCards(),
+            forceProcessFlip: () => this.processCardFlip()
+        };
     }
 
     /**
@@ -967,7 +1015,13 @@ class MemoryGame {
         }
         
         // In multiplayer mode, find the player by ID
-        return this.gameState.players.findIndex(player => player.id === this.gameState.playerId);
+        const playerIndex = this.gameState.players.findIndex(player => player.id === this.gameState.playerId);
+        console.log('getPlayerIndex result:', {
+            playerId: this.gameState.playerId,
+            players: this.gameState.players.map(p => ({id: p.id, name: p.name})),
+            foundIndex: playerIndex
+        });
+        return playerIndex !== -1 ? playerIndex : 0;
     }
 
     /**
@@ -1481,12 +1535,19 @@ class MemoryGame {
         const { cardId, symbol, playerId } = data;
         const cardIndex = this.gameState.cards.findIndex(card => card.id === cardId);
         
+        console.log('handleCardFlipped:', { cardId, symbol, playerId, cardIndex });
+        
         if (cardIndex !== -1) {
             const card = this.gameState.cards[cardIndex];
             const cardElement = document.querySelector(`[data-index="${cardIndex}"]`);
             
             card.isFlipped = true;
             card.symbol = symbol;
+            
+            // Add to flipped cards if not already there
+            if (!this.gameState.flippedCards.includes(cardIndex)) {
+                this.gameState.flippedCards.push(cardIndex);
+            }
             
             if (cardElement) {
                 this.updateCardVisualState(cardElement, card);
@@ -1503,6 +1564,8 @@ class MemoryGame {
         const { cards, playerId, scores } = data;
         this.gameState.scores = scores;
         
+        console.log('handleMatchFound:', { cards, playerId, scores });
+        
         cards.forEach(cardId => {
             const cardIndex = this.gameState.cards.findIndex(card => card.id === cardId);
             if (cardIndex !== -1) {
@@ -1518,16 +1581,26 @@ class MemoryGame {
             }
         });
         
+        // Clear flipped cards array
+        this.gameState.flippedCards = [];
         this.gameState.matchedPairs++;
+        
         const player = this.gameState.players.find(p => p.id === playerId);
         this.showStatus(`${player?.name || 'Player'} found a match!`, 'success');
         this.announce(`Match found by ${player?.name || 'player'}`);
         
         this.updateGameInfo();
+        
+        // Update all cards to ensure proper state
+        setTimeout(() => {
+            this.updateAllCards();
+        }, 100);
     }
 
     handleNoMatch(data) {
         const { cards } = data;
+        
+        console.log('handleNoMatch:', { cards });
         
         setTimeout(() => {
             cards.forEach(cardId => {
@@ -1544,14 +1617,28 @@ class MemoryGame {
                 }
             });
             
+            // Clear flipped cards array
+            this.gameState.flippedCards = [];
+            
             this.announce('No match found, cards flipped back');
+            
+            // Update all cards to ensure proper state
+            this.updateAllCards();
         }, 500);
     }
 
     handleTurnChanged(data) {
         const { currentPlayer } = data;
+        
+        console.log('handleTurnChanged:', {
+            currentPlayerFromServer: currentPlayer,
+            currentPlayers: this.gameState.players
+        });
+        
         this.gameState.currentPlayer = this.gameState.players.findIndex(p => p.id === currentPlayer.id);
         this.updatePlayersDisplay();
+        
+        console.log('Updated current player index:', this.gameState.currentPlayer);
         
         if (currentPlayer.id === this.gameState.playerId) {
             this.showStatus("It's your turn!", 'success');
