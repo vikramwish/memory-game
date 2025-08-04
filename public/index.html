@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Memory Game - A fun and interactive card-matching game with accessibility features">
+    <title>Memory Game - Test Your Memory Skills</title>
+    
+    <!-- Accessibility and SEO meta tags -->
+    <meta name="theme-color" content="#2196F3">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts for better typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Socket.IO Client -->
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <!-- Skip to main content for screen readers -->
+    <a href="#main-content" class="skip-link" aria-label="Skip to main content">Skip to main content</a>
+    
+    <!-- Header with navigation -->
+    <header class="header" role="banner">
+        <div class="container">
+            <h1 class="logo" aria-label="Memory Game">
+                <span class="logo-icon" aria-hidden="true">🧠</span>
+                Memory Game
+            </h1>
+            
+            <!-- Room and Player Info -->
+            <div id="room-info" class="room-info-header" style="display: none;">
+                <div class="room-display">
+                    <span class="room-label">Room:</span>
+                    <span id="current-room-id" class="room-id"></span>
+                </div>
+                <div id="current-turn-display" class="turn-display" style="display: none;">
+                    <span class="turn-label">Turn:</span>
+                    <span id="current-turn-player" class="turn-player"></span>
+                </div>
+            </div>
+            
+            <nav class="nav" role="navigation" aria-label="Main navigation">
+                <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle dark mode">
+                    <span class="theme-icon" aria-hidden="true">🌙</span>
+                </button>
+                <button id="help-btn" class="btn btn-icon" aria-label="Show help and instructions">
+                    <span aria-hidden="true">❓</span>
+                </button>
+                <button id="pause-btn" class="btn btn-icon" aria-label="Pause game" style="display: none;">
+                    <span aria-hidden="true">⏸️</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main id="main-content" class="main" role="main">
+        <div class="container">
+            
+            <!-- Game Setup Screen -->
+            <section class="game-setup">
+                <h2 class="setup-title">Memory Game Setup</h2>
+                
+                <form class="setup-form">
+                    <div class="form-group">
+                        <label for="player-name" class="form-label">Your Name:</label>
+                        <input 
+                            type="text" 
+                            id="player-name" 
+                            class="form-input" 
+                            placeholder="Enter your name"
+                            value="Player 1"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="grid-size" class="form-label">Grid Size:</label>
+                        <select id="grid-size" class="form-select">
+                            <option value="2">2x2 (Test)</option>
+                            <option value="4" selected>4x4 (Easy)</option>
+                            <option value="6">6x6 (Hard)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="theme-select" class="form-label">Theme:</label>
+                        <select id="theme-select" class="form-select">
+                            <option value="emojis" selected>Emojis</option>
+                            <option value="animals">Animals</option>
+                            <option value="numbers">Numbers</option>
+                            <option value="letters">Letters</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="room-id" class="form-label">Room ID (Multiplayer):</label>
+                        <input 
+                            type="text" 
+                            id="room-id" 
+                            class="form-input" 
+                            placeholder="Leave empty for single player"
+                        >
+                    </div>
+                </form>
+                
+                <div class="setup-actions">
+                    <button id="start-single" class="btn btn-primary">Start Single Player</button>
+                    <button id="create-room" class="btn btn-secondary">Create Room</button>
+                    <button id="join-room" class="btn btn-secondary">Join Room</button>
+                </div>
+            </section>
+
+            <!-- Game Section -->
+            <section class="game-section" style="display: none;">
+                
+                <!-- Game Info -->
+                <div class="game-info">
+                    <div class="info-card">
+                        <div class="info-label">Moves</div>
+                        <div id="moves-count" class="info-value">0</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Score</div>
+                        <div id="score-count" class="info-value">0</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Time</div>
+                        <div id="time-count" class="info-value">00:00</div>
+                    </div>
+                </div>
+                
+                <!-- Multiplayer Players List -->
+                <div class="multiplayer-section" style="display: none;">
+                    <h3>Players</h3>
+                    <div class="players-list"></div>
+                </div>
+                
+                <!-- Game Board -->
+                <div class="game-board" role="grid" aria-label="Memory game board">
+                    <!-- Cards will be dynamically inserted here -->
+                </div>
+                
+                <!-- Game Actions -->
+                <div class="game-actions" style="margin-top: 2rem; text-align: center;">
+                    <button id="restart-game-btn" class="btn btn-secondary">Restart Game</button>
+                    <button id="main-menu-btn" class="btn btn-secondary">Main Menu</button>
+                </div>
+                
+            </section>
+        </div>
+    </main>
+
+    <!-- JavaScript -->
+    <script src="game.js"></script>
+</body>
+</html>
